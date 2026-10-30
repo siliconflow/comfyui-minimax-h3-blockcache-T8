@@ -25,7 +25,27 @@ SPECTRUM_BINDING_KEY = "spectrum_h3_binding"
 BLOCK_SPARSE_CALLBACK_KEY = "block_sparse_attention"
 H3_RETURNS_RAW_AUDIO_VELOCITY = hasattr(comfy.model_sampling, "ModelSamplingAV")
 H3_FINAL_LAYER_TAKES_SAMPLING_ARGS = "sample_sigmas" in inspect.signature(FinalLayer.forward).parameters
-PREFETCH_CLEANUP_TAKES_MODULE = hasattr(comfy.model_prefetch, "GRAPH_MODULES")
+def _cleanup_takes_module() -> bool:
+    """Probe the real signature of cleanup_prefetched_modules.
+
+    ComfyUI cores that expose GRAPH_MODULES are known to take
+    (prefetched_module, comfy_modules); newer cores dropped the
+    GRAPH_MODULES attribute while keeping the two-argument signature,
+    so probing the attribute alone mis-detects and calls the function
+    with a single argument, raising:
+      cleanup_prefetched_modules() missing 1 required positional
+      argument: comfy_modules
+    """
+    try:
+        import inspect as _inspect
+        _params = _inspect.signature(
+            comfy.model_prefetch.cleanup_prefetched_modules
+        ).parameters
+        return len(_params) >= 2 or hasattr(comfy.model_prefetch, "GRAPH_MODULES")
+    except (AttributeError, ValueError):
+        return hasattr(comfy.model_prefetch, "GRAPH_MODULES")
+
+PREFETCH_CLEANUP_TAKES_MODULE = _cleanup_takes_module()
 PREFETCH_SUPPORTS_MALLOC_SCOPE = "malloc_scope" in inspect.signature(comfy.model_prefetch.prefetch_queue_pop).parameters
 
 
